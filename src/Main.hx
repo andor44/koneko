@@ -23,6 +23,8 @@ import irc.IRCSocket;
 import IRCPlugin; // needed for trigger, no idea why
 import AccessSettings;
 import Channel;
+import Settings;
+import SettingsParser;
 
 // because we like if it's shorter
 using Main;
@@ -65,7 +67,8 @@ class Main
 										// if you're loading a harmful module, well, good fucking job
 										// (just submit a pull req if you feel like explaining this...
 	
-	public static var accessSettings : AccessSettings;
+	static var accessSettings : AccessSettings;
+	static var ircSettings : Settings;
 	
 	static function rawHandler(rawLine : String) : Void
 	{
@@ -103,6 +106,11 @@ class Main
 		{
 			switch (split[0])
 			{
+				case ":writeconf":
+					if (getAccess(user.host) > accessSettings.writeconf_access) 
+					{
+						SettingsParser.serialize_config(ircSettings, split.lenght > 1 ? split[1] : "settings.koneko");
+					}
 				case ":dumpchan":
 					var str = "";
 					if (channels.keys().has(split[1])) 
@@ -350,6 +358,9 @@ class Main
 		var split = line.split(" ");
 		switch (number) 
 		{
+			case IRCReplies.RPL_WELCOME:
+				for (i in ircSettings.autojoin_channels) 
+					conn.doJoin(i);
 			case IRCReplies.RPL_TOPIC: // first is nick, second channel name, third is topic with colon, at least on 
 				if (channels.keys().has(split[1]))   //errything, joined by " ", remove semicolon
 					channels.get(split[1]).topic = split.slice(2).join(" ").substr(1);
@@ -457,21 +468,85 @@ class Main
 		return final_plugin;
 	}
 	
+	static function die(message : String)
+	{
+		trace(message);
+		Sys.exit(1);
+	}
+	
 	static function main() 
 	{
-		// TODO: read AccessSettings from config file NOT MANDATORY FOR NOW
 		modules = new Hash<IRCPlugin>();
 		users = if (FileSystem.exists("owners.dat")) 
-					haxe.Unserializer.run(File.getContent("owners.dat")); 
+					Unserializer.run(File.getContent("owners.dat")); 
 				else 
 					new Hash<UserInfo>();
 		
 		accessSettings = if (FileSystem.exists("access_settings.dat"))
-							Unserializer.run("access_settings.dat");
+							Unserializer.run(File.getContent("access_settings.dat"));
 						else 
 							new AccessSettings();
+		
+		if (Sys.args().length > 1) // did the user specify a config file?
+		{
+			if (FileSystem.exists(Sys.args()[1]))
+			{
+				try 
+				{
+					var filename = Sys.args()[1];
+					if (fileExtension(filename) == ".koneko") // serialized config file
+					{
+						trace("Loading serialized config file");
+						ircSettings = SettingsParser.unserialize_config(filename);
+					}
+					else if (fileExtension(filename) == ".conf")
+					{
+						trace("Parsing config file");
+						var parser = new SettingsParser(filename);
+						ircSettings = parser.run_parser();
+					}
+					else
+						die("Unknown file format, quitting");
+				}
+				catch (e : Dynamic)
+				{
+					die("Error in config file. Check your syntax or see if your file is a valid config file.");
+				}
+			}
+			else
+				die("Specified config file doesn't exist, quitting");
+		}
+		else // nah, try to load a default config
+		{
+			if (!FileSystem.exists("settings.koneko")) 
+				die("No config file specified and no default config file found, quitting");
+			try 
+			{
+				ircSettings = SettingsParser.unserialize_config(filename);
+			}
+			catch (e : Dynamic)
+				die("Invalid default config file");
+		}
+		if (!SettingsParser.validate_config(ircSettings)) 
+			die("Invalid config file or missing default parameters");
+		
 		channels = new Hash<Channel>();
-		conn = new irc.IRCSocket(new Host("irc.irchighway.net"), 6667, new IRCUser("anderp", "anderp", "anderp the sage wolf", "OLOLOLOL"));
+		
+		for (i in ircSettings.autoload_modules) 
+		{
+			var module : IRCPlugin;
+			try 
+			{
+				module = load_module(i);
+			}
+			catch (e : Dynamic)
+			{
+				trace("Couldn't load module '" + i + "', going on...");
+			}
+			modules.set(module.name, module);
+		}
+		
+		conn = new irc.IRCSocket(new Host(ircSettings.server_address), ircSettings.server_port, new IRCUser(ircSettings.nicks[0], ircSettings.name, ircSettings.realname, ""));
 		
 		// replacing inline function definitions because they seem to break autocompletion in FD4 :(
 		conn.onRaw = rawHandler;
@@ -494,7 +569,6 @@ class Main
 			catch(e : Dynamic)
 			{
 				Lib.println("OHSHI- " + e);
-				// resync(); // whatever man...
 			}
 		}
 		
@@ -547,5 +621,10 @@ class Main
 	{
 		for (i in iter) if (i == o) return true;
 		return false;
+	}
+	
+	public static function fileExtension(filename : String) : String
+	{
+		return filename.substr(filename.lastIndexOf("."));
 	}
 }

@@ -14,6 +14,7 @@ class Settings
 	public var auth_command : String;
 	public var auth_password : String;
 	public var server_address : String;
+	public var server_port : Int;
 	
 	public var autojoin_channels : List<String>;
 	public var autoload_modules : List<String>;

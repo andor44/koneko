@@ -18,6 +18,7 @@ class AccessSettings
 	public var say_access : Int;
 	public var listchans_access : Int;
 	public var resync_access : Int;
+	public var writeconf_access : Int;
 	
 	public function new()
 	{
@@ -32,5 +33,6 @@ class AccessSettings
 		say_access = 10;
 		listchans_access = 5;
 		resync_access = 10;
+		writeconf_access = 10;
 	}
 }
