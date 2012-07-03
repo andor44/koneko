@@ -59,6 +59,7 @@ class IRCSocket
 	public var onPart : IRCUser -> String -> String -> Void;
 	public var onQuit : IRCUser -> String -> Void;
 	public var onNick : IRCUser -> String -> Void;
+	public var onKick : IRCUser -> String -> String -> String -> Void;
 	
 	public var isConnected : Bool;
 	public var autoPing : Bool; // determines wheter we do auto ping reply
@@ -160,6 +161,17 @@ class IRCSocket
 					var channel = split[2];
 					var topic = split.slice(3).join(" ").substr(1);
 					onTopic(new IRCUser(user.split("!")[0], user.split("!")[1].split("@")[0], null, user.split("@")[1]), channel, topic);
+				}
+			case "KICK":
+				if (onKick != null) 
+				{
+					var split = line.split(" ");
+					var kicker_pre = split[0].substr(1);
+					var kicker = new IRCUser(kicker_pre.split("!")[0], kicker_pre.split("!")[1].split("@")[0], null, kicker_pre.split("@")[1]);
+					var chan = split[2];
+					var nick = split[3];
+					var reason = split.slice(4).join(" ").substr(1);
+					onKick(kicker, chan, nick, reason);
 				}
 			default:
 				var numericReply = getNumericReply(line);

@@ -11,6 +11,8 @@ import neko.FileSystem;
 import neko.io.File;
 import Settings;
 
+using StringTools;
+
 class SettingsParser 
 {
 	var filename : String;
@@ -23,9 +25,13 @@ class SettingsParser
 	{
 		var settings = new Settings();
 		var file_contents = File.getContent(filename);
+		if (file_contents.indexOf("\r\n") > 0) 
+			file_contents.replace("\r\n", "\n"); // because fuck line endings :(
 		for (i in file_contents.split("\n")) 
 		{
-			if (i.length == 0 && i[0] == '//') continue; // empty line or entire line is comment
+			i = i.substr(0, i.length - 1); // something about line endings too, ┐('～`；)┌
+			
+			if (i.length == 0 && i.charAt(0) == '//') continue; // empty line or entire line is comment
 			if (i.indexOf("//") > 0) 
 				i = i.substr(0, i.indexOf("//")); // line contains a comment
 			var split = i.split(" ");
@@ -33,7 +39,7 @@ class SettingsParser
 			{
 				case "nicks":
 					for (i in split.slice(1)) 
-						settings.nicks.add(i);
+						settings.nicks.push(i);
 				case "name":
 					settings.name = split[1];
 				case "realname":
@@ -55,10 +61,14 @@ class SettingsParser
 				case "autoload_modules":
 					for (i in split.slice(1)) 
 						settings.autoload_modules.add(i);
+				case "autorejoin_enabled":
+					if (split[1] == "true" || split[1] == "yes")
+						settings.autorejoin_enabled = true; // defaults to false in config file
 				default:
 					trace("unknown config variable '" + split[0] + "', skipping");
 			}
 		}
+		return settings;
 	}
 	public static function validate_config(settings : Settings) : Bool
 	{

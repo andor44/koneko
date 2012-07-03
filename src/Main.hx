@@ -109,7 +109,7 @@ class Main
 				case ":writeconf":
 					if (getAccess(user.host) > accessSettings.writeconf_access) 
 					{
-						SettingsParser.serialize_config(ircSettings, split.lenght > 1 ? split[1] : "settings.koneko");
+						SettingsParser.serialize_config(ircSettings, split.length > 1 ? split[1] : "settings.koneko");
 					}
 				case ":dumpchan":
 					var str = "";
@@ -429,6 +429,14 @@ class Main
 		}
 	}
 	
+	static function kickHandler(kicker : IRCUser, chan : String, nick : String, reason : String)
+	{
+		if (ircSettings.autorejoin_enabled && (conn.myself.nick == nick)) 
+		{
+			conn.doJoin(chan);
+		}
+	}
+	
 	static function resync()
 	{
 		// BUG: do not use, causes floodkick on most servers
@@ -487,13 +495,13 @@ class Main
 						else 
 							new AccessSettings();
 		
-		if (Sys.args().length > 1) // did the user specify a config file?
+		if (Sys.args().length >= 1) // did the user specify a config file?
 		{
-			if (FileSystem.exists(Sys.args()[1]))
+			if (FileSystem.exists("./" + Sys.args()[0]))
 			{
 				try 
 				{
-					var filename = Sys.args()[1];
+					var filename = Sys.args()[0];
 					if (fileExtension(filename) == ".koneko") // serialized config file
 					{
 						trace("Loading serialized config file");
@@ -522,7 +530,7 @@ class Main
 				die("No config file specified and no default config file found, quitting");
 			try 
 			{
-				ircSettings = SettingsParser.unserialize_config(filename);
+				ircSettings = SettingsParser.unserialize_config("settings.koneko");
 			}
 			catch (e : Dynamic)
 				die("Invalid default config file");
@@ -534,7 +542,7 @@ class Main
 		
 		for (i in ircSettings.autoload_modules) 
 		{
-			var module : IRCPlugin;
+			var module : IRCPlugin = null;
 			try 
 			{
 				module = load_module(i);
@@ -546,7 +554,7 @@ class Main
 			modules.set(module.name, module);
 		}
 		
-		conn = new irc.IRCSocket(new Host(ircSettings.server_address), ircSettings.server_port, new IRCUser(ircSettings.nicks[0], ircSettings.name, ircSettings.realname, ""));
+		conn = new irc.IRCSocket(new Host(ircSettings.server_address), ircSettings.server_port, new IRCUser(ircSettings.nicks[0], ircSettings.name, ircSettings.realname, "koneko"));
 		
 		// replacing inline function definitions because they seem to break autocompletion in FD4 :(
 		conn.onRaw = rawHandler;
@@ -557,6 +565,7 @@ class Main
 		conn.onNumericEvent = numericHandler;
 		conn.onNick = nickHandler;
 		conn.onQuit = quitHandler;
+		conn.onKick = kickHandler;
 		
 		conn.start();
 		
@@ -568,6 +577,10 @@ class Main
 			}
 			catch(e : Dynamic)
 			{
+				// Server dropped connection, shikatanai
+				// TODO: implement reconnect mechanism
+				if (Std.string(e).contains("EOF")) 
+					break;
 				Lib.println("OHSHI- " + e);
 			}
 		}
