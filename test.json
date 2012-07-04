@@ -1,0 +1,10 @@
+{
+	"name": "koneko",
+	"server_address": "irc.freenode.net",
+	"server_port": 6667,
+	"autoload_modules": [],
+	"nicks": ["koneko"],
+	"realname": "koneko :3",
+	"autojoin_channels": ["#andorshouse"],
+	"autorejoin_enabled": false
+}
