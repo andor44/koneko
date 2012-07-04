@@ -5,11 +5,14 @@ package ;
  * @author Andor
  */
 
+import haxe.Json;
 import haxe.Serializer;
 import haxe.Unserializer;
 import neko.FileSystem;
 import neko.io.File;
+import neko.io.Path;
 import Settings;
+import Type;
 
 using StringTools;
 
@@ -23,6 +26,9 @@ class SettingsParser
 	
 	public function run_parser() : Settings
 	{
+		if (Path.extension(filename) == "json") 
+			return cast(Json.parse(File.getContent(filename)), Settings); // why not make our lives less miserable while we're at it
+		
 		var settings = new Settings();
 		var file_contents = File.getContent(filename);
 		if (file_contents.indexOf("\r\n") > 0) 
@@ -36,40 +42,31 @@ class SettingsParser
 			if (i.indexOf("//") > 0) 
 				i = i.substr(0, i.indexOf("//")); // line contains a comment
 			var split = i.split(" ");
-			switch (split[0]) 
+			
+			if (Reflect.hasField(settings, split[0])) 
 			{
-				case "nicks":
-					for (i in split.slice(1)) 
-						settings.nicks.push(i);
-				case "name":
-					settings.name = split[1];
-				case "realname":
-					settings.name = split.slice(1).join(" ");
-				case "auth_nick":
-					settings.auth_nick = split[1];
-				case "auth_command":
-					settings.auth_command = split.slice(1).join(" ");
-				case "auth_password":
-					settings.auth_password = split[1];
-				case "server_address":
-					settings.server_address = split[1];
-				case "server_port":
-					var port = Std.parseInt(split[1]);
-					settings.server_port = port == null ? 6667 : port;
-				case "autojoin_channels":
-					for (i in split.slice(1)) 
-						settings.autojoin_channels.add(i);
-				case "autoload_modules":
-					for (i in split.slice(1)) 
-						settings.autoload_modules.add(i);
-				case "autorejoin_enabled":
-					if (split[1] == "true" || split[1] == "yes")
-						settings.autorejoin_enabled = true; // defaults to false in config file
-				case "claim":
-					settings.claim_pw = split[1];
-				default:
-					trace("unknown config variable '" + split[0] + "', skipping");
+				switch (Type.getClassName(Type.getClass(Reflect.field(settings, split[0])))) 
+				{
+					case "String":
+						Reflect.setField(settings, split[0], split.slice(1).join(" "));
+					case "Array":
+						Reflect.setField(settings, split[0], split.slice(1));
+					default:
+						switch (Type.typeof(Reflect.field(settings, split[0])))
+						{	
+							case ValueType.TBool:
+								Reflect.setField(settings, split[0], split[1] == "true" || split[1] == "yes");
+							case ValueType.TInt:
+								Reflect.setField(settings, split[0], Std.parseInt(split[1]));
+							case ValueType.TFloat:
+								Reflect.setField(settings, split[0], Std.parseFloat(split[1]));
+							default:
+								trace("LOLWHAT!?");
+						}
+				}
 			}
+			else
+				trace("unknown config variable '" + split[0] + "', skipping");
 		}
 		return settings;
 	}

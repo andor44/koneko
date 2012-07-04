@@ -1,7 +1,6 @@
 package ;
 
 // builtins
-import haxe.macro.Expr;
 import haxe.Md5;
 import haxe.Serializer;
 import haxe.Stack;
@@ -285,9 +284,9 @@ class Main
 					conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + channels.get(target).topic); // this'll probably break a whole. damn. lot.
 				}
 				case ":claim":
-				if (users.empty() && ircSettings.claim_pw != null && ircSettings.claim_pw != "") 
+				if (users.empty() && ircSettings.claim != null && ircSettings.claim != "") 
 				{
-					if (split.length > 3 && (split[1] == ircSettings.claim_pw)) 
+					if (split.length > 3 && (split[1] == ircSettings.claim)) 
 					{
 						users.set(split[2], new UserInfo(split[3], 11)); // we can assume level 11 here, highest access requirement by default is 10
 						conn.doPrivMsg(user.nick, "Claim accepted. Added you as the new master user.");
@@ -512,7 +511,7 @@ class Main
 						trace("Loading serialized config file");
 						ircSettings = SettingsParser.unserialize_config(filename);
 					}
-					else if (Path.extension(filename) == "conf")
+					else if (Path.extension(filename) == "conf" || Path.extension(filename) == "json")
 					{
 						trace("Parsing config file");
 						var parser = new SettingsParser(filename);
