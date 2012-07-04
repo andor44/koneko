@@ -10,6 +10,7 @@ import neko.Boot;
 import neko.FileSystem;
 import neko.io.File;
 import neko.io.FileOutput;
+import neko.io.Path;
 import neko.Lib;
 import neko.net.Host;
 import neko.Sys;
@@ -70,6 +71,8 @@ class Main
 	static var accessSettings : AccessSettings;
 	static var ircSettings : Settings;
 	
+	public static var config_dir = "./servers";
+	
 	static function rawHandler(rawLine : String) : Void
 	{
 		Lib.println(rawLine);
@@ -107,20 +110,20 @@ class Main
 			switch (split[0])
 			{
 				case ":writeconf":
-					if (getAccess(user.host) > accessSettings.writeconf_access) 
-					{
-						SettingsParser.serialize_config(ircSettings, split.length > 1 ? split[1] : "settings.koneko");
-					}
+				if (getAccess(user.host) > accessSettings.writeconf_access) 
+				{
+					SettingsParser.serialize_config(ircSettings, split.length > 1 ? split[1] : "settings.koneko");
+				}
 				case ":dumpchan":
-					var str = "";
-					if (channels.keys().has(split[1])) 
+				var str = "";
+				if (channels.keys().has(split[1])) 
+				{
+					for (i in channels.get(split[1]).users) 
 					{
-						for (i in channels.get(split[1]).users) 
-						{
-							str += i.nick + " " + i.mode + " ";
-						}
-						conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + split[1] + ": " + str);
+						str += i.nick + " " + i.mode + " ";
 					}
+					conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + split[1] + ": " + str);
+				}
 				case ":loadmod", ":loadmodule":
 				{
 					if (getAccess(user.host) >= accessSettings.loadmod_access)
@@ -165,7 +168,7 @@ class Main
 				}
 				case ":adduser":
 				{
-					if (getAccess(user.host) >= accessSettings.adduser_access || user.host == "wat.wat.wat")
+					if (getAccess(user.host) >= accessSettings.adduser_access)
 					{
 						if (split.length < 4)
 							conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + "not enough params, use: :adduser <username> <md5 pass> <access>");
@@ -277,10 +280,21 @@ class Main
 					}
 				}
 				case ":topic":
-					if (inChannel) 
+				if (inChannel) 
+				{
+					conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + channels.get(target).topic); // this'll probably break a whole. damn. lot.
+				}
+				case ":claim":
+				if (users.empty() && ircSettings.claim_pw != null && ircSettings.claim_pw != "") 
+				{
+					if (split.length > 3 && (split[1] == ircSettings.claim_pw)) 
 					{
-						conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + channels.get(target).topic); // this'll probably break a whole. damn. lot.
+						users.set(split[2], new UserInfo(split[3], 11)); // we can assume level 11 here, highest access requirement by default is 10
+						conn.doPrivMsg(user.nick, "Claim accepted. Added you as the new master user.");
 					}
+					else
+						conn.doPrivMsg(inChannel ? target : user.nick, (inChannel?user.nick + ": " : "") + "Syntax is :claim <claim pw> <username> <md5 of password>");
+				}
 				case ":vm", ":neko":
 				{
 					if (split.length < 2)
@@ -486,17 +500,6 @@ class Main
 	
 	static function main() 
 	{
-		modules = new Hash<IRCPlugin>();
-		users = if (FileSystem.exists("owners.dat")) 
-					Unserializer.run(File.getContent("owners.dat")); 
-				else 
-					new Hash<UserInfo>();
-		
-		accessSettings = if (FileSystem.exists("access_settings.dat"))
-							Unserializer.run(File.getContent("access_settings.dat"));
-						else 
-							new AccessSettings();
-		
 		if (Sys.args().length >= 1) // did the user specify a config file?
 		{
 			if (FileSystem.exists("./" + Sys.args()[0]))
@@ -504,12 +507,12 @@ class Main
 				try 
 				{
 					var filename = Sys.args()[0];
-					if (fileExtension(filename) == ".koneko") // serialized config file
+					if (Path.extension(filename) == "koneko") // serialized config file
 					{
 						trace("Loading serialized config file");
 						ircSettings = SettingsParser.unserialize_config(filename);
 					}
-					else if (fileExtension(filename) == ".conf")
+					else if (Path.extension(filename) == "conf")
 					{
 						trace("Parsing config file");
 						var parser = new SettingsParser(filename);
@@ -537,9 +540,30 @@ class Main
 			catch (e : Dynamic)
 				die("Invalid default config file");
 		}
+		
 		if (!SettingsParser.validate_config(ircSettings)) 
 			die("Invalid config file or missing default parameters");
 		
+		var config_subdir = config_dir + "/" + ircSettings.server_address + "_" + ircSettings.nicks[0];
+		
+		if (!FileSystem.exists(config_dir)) 
+			FileSystem.createDirectory(config_dir);
+		
+		if (!FileSystem.exists(config_subdir))
+			FileSystem.createDirectory(config_subdir);
+		
+		if (!FileSystem.exists(config_subdir)) // i think neko throws an exception when it can't write a directory, but let's be safe
+			die("Unable to write directory '" + config_subdir + "'. Exiting"); // maybe i should make this graceful like module loading?
+		
+		modules = new Hash<IRCPlugin>();
+		users = if (FileSystem.exists(config_subdir + "owners.dat")) 
+					Unserializer.run(File.getContent(config_subdir + "/" + "owners.dat")); 
+				else 
+					new Hash<UserInfo>();
+		accessSettings = if (FileSystem.exists(config_subdir + "/" + "access_settings.dat"))
+							Unserializer.run(File.getContent(config_subdir + "/" + "access_settings.dat"));
+						else 
+							new AccessSettings();
 		channels = new Hash<Channel>();
 		
 		for (i in ircSettings.autoload_modules) 
@@ -588,12 +612,12 @@ class Main
 		}
 		
 		var serializedOwners = Serializer.run(users);
-		var ownersWriter = File.write("owners.dat", false);
+		var ownersWriter = File.write(config_subdir + "/" + "owners.dat", false);
 		ownersWriter.writeString(serializedOwners);
 		ownersWriter.close();
 		
 		var serializedAccess = Serializer.run(accessSettings);
-		var accessWriter = File.write("access.dat", false);
+		var accessWriter = File.write(config_subdir + "/" + "access.dat", false);
 		accessWriter.writeString(serializedAccess);
 		accessWriter.close();
 		
@@ -636,10 +660,5 @@ class Main
 	{
 		for (i in iter) if (i == o) return true;
 		return false;
-	}
-	
-	public static function fileExtension(filename : String) : String
-	{
-		return filename.substr(filename.lastIndexOf("."));
 	}
 }

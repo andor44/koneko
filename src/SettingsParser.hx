@@ -29,7 +29,8 @@ class SettingsParser
 			file_contents.replace("\r\n", "\n"); // because fuck line endings :(
 		for (i in file_contents.split("\n")) 
 		{
-			i = i.substr(0, i.length - 1); // something about line endings too, ┐('～`；)┌
+			if (i.charAt(i.length-1) == "\r" || i.charAt(i.length-1) == "\n") // god i sure hate line endings
+				i = i.substr(0, i.length - 1); // something about line endings too, ┐('～`；)┌
 			
 			if (i.length == 0 && i.charAt(0) == '//') continue; // empty line or entire line is comment
 			if (i.indexOf("//") > 0) 
@@ -64,6 +65,8 @@ class SettingsParser
 				case "autorejoin_enabled":
 					if (split[1] == "true" || split[1] == "yes")
 						settings.autorejoin_enabled = true; // defaults to false in config file
+				case "claim":
+					settings.claim_pw = split[1];
 				default:
 					trace("unknown config variable '" + split[0] + "', skipping");
 			}

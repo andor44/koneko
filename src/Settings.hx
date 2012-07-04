@@ -16,6 +16,7 @@ class Settings
 	public var server_address : String;
 	public var server_port : Int;
 	public var autorejoin_enabled : Bool;
+	public var claim_pw : String;
 	
 	public var autojoin_channels : List<String>;
 	public var autoload_modules : List<String>;
