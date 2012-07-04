@@ -32,7 +32,7 @@ using Lambda;
 using StringTools;
 
 /**
- * @author Andor
+ * @author Andor Uhlar
  * 
  * koneko - a rather dumb haXe/neko irc bot
  * (c) 2011 Andor Uhlar et al
@@ -361,6 +361,8 @@ class Main
 			case IRCReplies.RPL_WELCOME:
 				for (i in ircSettings.autojoin_channels) 
 					conn.doJoin(i);
+				if (ircSettings.auth_nick != "@@noauth") 
+					conn.doPrivMsg(ircSettings.auth_nick, ircSettings.auth_command + " " + ircSettings.auth_password);
 			case IRCReplies.RPL_TOPIC: // first is nick, second channel name, third is topic with colon, at least on 
 				if (channels.keys().has(split[1]))   //errything, joined by " ", remove semicolon
 					channels.get(split[1]).topic = split.slice(2).join(" ").substr(1);
