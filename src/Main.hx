@@ -504,17 +504,16 @@ class Main
 		
 		for (i in Reflect.fields(classes)) 
 		{
-			if (!i.startsWith("Koneko")) 
-				continue;
+			if (i == "IRCPlugin") continue;
 			try 
 			{
 				var class_proto = Reflect.field(classes, i);
-				var plugin : IRCPlugin = Type.createInstance(class_proto, []);  // if we can construct the class as an IRCPlugin, it should be safe to return it
-				return plugin;
+				if (Type.getClassName(Type.getSuperClass(class_proto)) == "IRCPlugin") 
+					return Type.createInstance(class_proto, []);
 			}
 			catch (e: Dynamic) { }
 		}
-		trace("Error! Module '" + modname + "' contains no IRC plugin class. Please make sure the class name starts with Koneko.");
+		trace("Error! Module '" + modname + "' contains no IRC plugin class.");
 		return null;
 	}
 	
