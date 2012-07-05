@@ -452,17 +452,32 @@ class Main
 		}
 	}
 	
-	static function resync()
+	static function resync(channel : String = "all")
 	{
-		// BUG: do not use, causes floodkick on most servers
-		for (i in channels) // let's hope this'll put an end to random quits for now >:(
+		if (channel == "all") 
 		{
-			i.users = new Array<ChannelUser>();
-			conn.doRaw("NAMES " + i.name);
-			conn.doRaw("WHO " + i.name);
+			// BUG: do not use, causes floodkick on most servers
+			for (i in channels) // let's hope this'll put an end to random quits for now >:(
+			{
+				i.users = new Array<ChannelUser>();
+				conn.doRaw("NAMES " + i.name);
+				conn.doRaw("WHO " + i.name);
+			}
+		}
+		else
+		{
+			switch (channel.charAt(0)) 
+			{
+				case "#", "&":
+					channels.get(channel).users = new Array<ChannelUser>();
+					conn.doRaw("NAMES " + channel);
+					conn.doRaw("WHO " + channel); 
+				default:
+					return;
+			}
 		}
 	}
-	
+
 	static function load_module(name : String) : IRCPlugin
 	{
 		var loader = Loader.local();
@@ -486,9 +501,21 @@ class Main
 		if (old_path != "")
 			FileSystem.rename(new_path, old_path);
 		var classes : Dynamic = mod.exportsTable().__classes;
-		var obj = Type.createInstance(classes.External, []);
-		var final_plugin : IRCPlugin = obj;
-		return final_plugin;
+		
+		for (i in Reflect.fields(classes)) 
+		{
+			if (!i.startsWith("Koneko")) 
+				continue;
+			try 
+			{
+				var class_proto = Reflect.field(classes, i);
+				var plugin : IRCPlugin = Type.createInstance(class_proto, []);  // if we can construct the class as an IRCPlugin, it should be safe to return it
+				return plugin;
+			}
+			catch (e: Dynamic) { }
+		}
+		trace("Error! Module '" + modname + "' contains no IRC plugin class. Please make sure the class name starts with Koneko.");
+		return null;
 	}
 	
 	static function die(message : String)
@@ -555,7 +582,7 @@ class Main
 			die("Unable to write directory '" + config_subdir + "'. Exiting"); // maybe i should make this graceful like module loading?
 		
 		modules = new Hash<IRCPlugin>();
-		users = if (FileSystem.exists(config_subdir + "owners.dat")) 
+		users = if (FileSystem.exists(config_subdir + "/" + "owners.dat")) 
 					Unserializer.run(File.getContent(config_subdir + "/" + "owners.dat")); 
 				else 
 					new Hash<UserInfo>();
